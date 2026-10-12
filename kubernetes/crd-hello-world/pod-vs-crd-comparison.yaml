@@ -1,0 +1,42 @@
+# ==============================================================================
+# 深入对比：Kubernetes 原生资源 (Pod) vs 自定义资源 (Greeting)
+# ==============================================================================
+# 结论：在 Kubernetes 统一的声明式架构中，“官方自带亲儿子 (Pod)” 与 “我们扩展的干儿子 (Greeting)”
+#      在资源规范上完全一视同仁，都遵循：apiVersion + kind + metadata + spec 四大件！
+# ==============================================================================
+
+---
+# ------------------------------------------------------------------------------
+# 1. 自定义资源实例 (Custom Resource Instance)：Greeting
+# ------------------------------------------------------------------------------
+# 数据规范来源于我们编写的：crd.yaml
+apiVersion: demo.example.com/v1   # 对应 crd.yaml 中的 spec.group/spec.versions.name
+kind: Greeting                    # 对应 crd.yaml 中的 spec.names.kind
+
+metadata:
+  name: hello-example             # 资源对象名称
+  namespace: default              # 资源所属命名空间 (因为 CRD 中定义了 scope: Namespaced)
+
+spec:                             # 用户期望的状态 (Desired State)
+  message: "Hello Kubernetes CRD!"# 在 crd.yaml 的 openAPIV3Schema 中被强制要求 (required) 的字符串字段
+
+
+---
+# ------------------------------------------------------------------------------
+# 2. 官方原生资源实例 (Native Resource Instance)：Pod
+# ------------------------------------------------------------------------------
+# 数据规范来源于 Kubernetes 核心源码 (Go 结构体 k8s.io/api/core/v1.Pod)
+apiVersion: v1                    # 核心组 Core Group，默认省略 group 名，只写版本
+kind: Pod                         # 官方原生资源类型
+
+metadata:
+  name: nginx-example             # 资源对象名称
+  namespace: default              # 资源所属命名空间
+
+spec:                             # 用户期望的状态 (Desired State)
+  containers:                     # 官方规定的容器列表字段
+    - name: nginx
+      image: nginx:alpine
+      ports:
+        - containerPort: 80
+
