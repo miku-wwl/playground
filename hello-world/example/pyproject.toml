@@ -5,3 +5,4 @@ description = "Consumer example application for miku-hello-demo"
 dependencies = [
     "miku-hello-demo>=1.0.0",
 ]
+
