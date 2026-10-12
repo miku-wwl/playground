@@ -1,8 +1,0 @@
-[build-system]
-requires = ["setuptools"]
-build-backend = "setuptools.build_meta"
-
-[project]
-name = "miku-hello-demo"
-version = "1.0.0"
-
