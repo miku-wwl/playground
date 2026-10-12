@@ -3,6 +3,6 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "hello-demo-example"
+name = "miku-hello-demo"
 version = "1.0.0"
 
