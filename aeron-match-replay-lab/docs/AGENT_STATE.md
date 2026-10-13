@@ -41,7 +41,7 @@ The desired producer isolation is a goal to validate, not an assumption: channel
 
 - Existing project: `aeron-match-replay-lab`, Spring Boot 4.1.1, Java release 17, Aeron client/archive 1.53.3.
 - Observed local toolchain: OpenJDK 21.0.6 and Maven 3.9.9.
-- Uses the non-web Spring Boot starter; no HTTP server is configured.
+- The initial Phase 0 scaffold had no HTTP server; the Phase 2 teaching refinement now adds Spring MVC and an HTTP demo endpoint.
 - The scaffold was committed and pushed to `main` as `9e2e278318662c18fe17f5c92e3c7a4470cd5c22`. The Phase 1 implementation and handoff notes were pushed as `d3f4e93f4ef8c5b684892eb7deb4b43c3c1c9720`; local `HEAD`, `origin/main`, and live GitHub `main` were checked equal after the push.
 - Phase 0 did not start MediaDriver or Archive and did not record/replay events.
 
@@ -56,14 +56,14 @@ The desired producer isolation is a goal to validate, not an assumption: channel
 
 ### Phase 2 — Real Aeron Archive record/replay: PASS
 
-- `TradingReplayDemo` is the `CommandLineRunner` entry point, `ReplayService` coordinates record/replay/verification, and `AeronArchiveGateway` owns the real embedded `ArchivingMediaDriver`, Archive, Aeron client, and their resources. Trading events use Aeron IPC; replay uses a separate stream ID and session-bound subscription.
+- `TradingReplayDemo` is a REST controller exposing `POST /api/demo/roundtrip`; it delegates to `ReplayService`, which coordinates Record → Replay → Verify. The Spring-managed `AeronArchiveGateway` owns one embedded `ArchivingMediaDriver`, Archive, and Aeron client for the application lifetime. Trading events use Aeron IPC; each request gets separate recording/replay stream IDs and a session-bound replay subscription.
 - `TradingEventCodec` serializes the three Phase 1 event types. Six events were published in sequence 1–6. The publication stop position and Archive recording position both reached `544` before recording was stopped.
 - The Archive catalog was queried with `listRecordingsForUri`; the demo recording ID was `0`. Important API distinction: `startRecording` returned a subscription ID (`30` in this run), not the recording ID.
-- Current runtime evidence: `mvn -q spring-boot:run` completed with `ROUND_TRIP_EVENTS=6/6`, `ROUND_TRIP_ORDER_MATCH=PASS`, and `STATE_RECONSTRUCTION=PASS`. The replayed state ended at sequence 6 with B-1001 quantity 3, 2 trades, and cumulative quantity 7.
+- Current runtime evidence: `mvn test` passed all 5 tests, including real Archive round trips and concurrent service calls. A live Spring Boot server accepted two simultaneous HTTP POST requests and returned `{"publishedEvents":6,"recordingId":0,"replayedEvents":6,"stateMatched":true}` and the same result with `recordingId:1`. Logs showed Archive position `544`, all six events replayed in order, and `STATE_MATCHED=true` for both requests.
 - The run created real files in `target/aeron-phase2-runs/run-15262213981059113960/archive`: `0-0.rec`, `archive.catalog`, and `archive-mark.dat`. The recording position matched the publication stop position at `544`.
 - Actual test evidence: `mvn -B '-Dmaven.compiler.showDeprecation=true' clean package` passed all 4 tests and built the executable JAR. JUnit dependency tree was checked and pinned to Jupiter 5.13.4 with JUnit Platform 1.13.4.
 - Agrona 2.6.1 requires opening `java.base/jdk.internal.misc` for `org.agrona.UnsafeApi`; Maven Surefire and Spring Boot run are configured with `--add-opens=java.base/jdk.internal.misc=ALL-UNNAMED`. This does not make a JAR invocation without the option work; use `mvn spring-boot:run` or pass the option to `java`.
-- Each demo invocation writes to a fresh directory under `target/aeron-phase2-runs`. This proves real local recording/replay, but Phase 2 does not yet prove recovery across JVMs, stable archive reuse, crash durability, or production behavior. `mvn clean` removes these demo files.
+- Each application startup creates one fresh directory under `target/aeron-phase2-runs`; HTTP calls share that Archive instance but use request-specific streams and are serialized by the service. This proves local recording/replay and request isolation, but Phase 2 does not prove recovery across JVMs, crash durability, or production behavior. `mvn clean` removes these demo files.
 
 ### Remaining phases
 
@@ -82,4 +82,4 @@ The desired producer isolation is a goal to validate, not an assumption: channel
 
 ## Next step
 
-The next unfinished implementation phase is Phase 3. Wait for the user's explicit instruction `继续 Phase 3` before starting it. Keep this project one phase at a time and report actual logs/tests at each phase boundary.
+Continue the requested code-reading lesson in order: Controller, then Service, then Gateway, one component per user instruction. Phase 3 remains NOT STARTED; wait for the user's explicit instruction before beginning it.

@@ -14,6 +14,9 @@ import io.aeron.archive.codecs.SourceLocation;
 import io.aeron.archive.status.RecordingPos;
 import io.aeron.driver.MediaDriver;
 import org.agrona.concurrent.UnsafeBuffer;
+import org.springframework.beans.factory.DisposableBean;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -21,47 +24,49 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.BooleanSupplier;
 
-/** Owns the real Aeron and Aeron Archive connections used by a single round trip. */
-public final class AeronArchiveGateway implements AutoCloseable
+/** Owns one application's real Aeron and Aeron Archive connections. */
+@Component
+public final class AeronArchiveGateway implements AutoCloseable, DisposableBean
 {
     private static final String LIVE_CHANNEL = "aeron:ipc";
     private static final String REPLAY_CHANNEL = "aeron:ipc";
     private static final String ARCHIVE_CONTROL_CHANNEL = "aeron:ipc?term-length=64k";
     private static final String ARCHIVE_REPLICATION_CHANNEL = "aeron:udp?endpoint=localhost:0";
-    private static final int LIVE_STREAM_ID = 10_001;
-    private static final int REPLAY_STREAM_ID = 10_002;
+    private static final int FIRST_REQUEST_STREAM_ID = 20_001;
     private static final int ARCHIVE_CONTROL_STREAM_ID = 10_003;
     private static final int ARCHIVE_CONTROL_RESPONSE_STREAM_ID = 10_004;
     private static final Duration OPERATION_TIMEOUT = Duration.ofSeconds(15);
     private static final int MAX_REPLAY_FRAGMENTS_PER_POLL = 16;
 
     private final Path archiveDirectory;
+    private final AtomicInteger nextStreamId = new AtomicInteger(FIRST_REQUEST_STREAM_ID);
     private ArchivingMediaDriver archivingMediaDriver;
     private Aeron aeron;
     private AeronArchive archive;
-    private boolean closed;
+    private volatile boolean closed;
 
-    private AeronArchiveGateway(final Path archiveDirectory)
+    @Autowired
+    public AeronArchiveGateway() throws IOException
     {
-        this.archiveDirectory = archiveDirectory;
+        this(Path.of("target", "aeron-phase2-runs"));
     }
 
-    public static AeronArchiveGateway open(final Path outputDirectory) throws IOException
+    public AeronArchiveGateway(final Path outputDirectory) throws IOException
     {
         Files.createDirectories(outputDirectory);
         final Path runDirectory = Files.createTempDirectory(outputDirectory, "run-");
         final Path mediaDriverDirectory = runDirectory.resolve("media-driver");
-        final Path archiveDirectory = runDirectory.resolve("archive");
+        archiveDirectory = runDirectory.resolve("archive");
         Files.createDirectories(archiveDirectory);
 
-        final AeronArchiveGateway gateway = new AeronArchiveGateway(archiveDirectory);
         try
         {
-            gateway.archivingMediaDriver = ArchivingMediaDriver.launch(
+            archivingMediaDriver = ArchivingMediaDriver.launch(
                 new MediaDriver.Context()
                     .aeronDirectoryName(mediaDriverDirectory.toString())
                     .dirDeleteOnStart(true),
@@ -76,24 +81,23 @@ public final class AeronArchiveGateway implements AutoCloseable
                         .controlResponseChannel(ARCHIVE_CONTROL_CHANNEL)
                         .controlResponseStreamId(ARCHIVE_CONTROL_RESPONSE_STREAM_ID))
                     .deleteArchiveOnStart(false));
-            gateway.aeron = Aeron.connect(
+            aeron = Aeron.connect(
                 new Aeron.Context().aeronDirectoryName(mediaDriverDirectory.toString()));
-            gateway.archive = AeronArchive.connect(new AeronArchive.Context()
+            archive = AeronArchive.connect(new AeronArchive.Context()
                 .controlRequestChannel(ARCHIVE_CONTROL_CHANNEL)
                 .controlRequestStreamId(ARCHIVE_CONTROL_STREAM_ID)
                 .controlResponseChannel(ARCHIVE_CONTROL_CHANNEL)
                 .controlResponseStreamId(ARCHIVE_CONTROL_RESPONSE_STREAM_ID)
-                .aeron(gateway.aeron));
+                .aeron(aeron));
 
             System.out.println("ARCHIVE_DIRECTORY=" + archiveDirectory.toAbsolutePath());
             System.out.println("MEDIA_DRIVER_ARCHIVE=STARTED (embedded)");
-            return gateway;
         }
         catch (final RuntimeException failure)
         {
             try
             {
-                gateway.close();
+                close();
             }
             catch (final RuntimeException closeFailure)
             {
@@ -106,14 +110,20 @@ public final class AeronArchiveGateway implements AutoCloseable
     public Recording record(final List<TradingEvent> events) throws IOException
     {
         ensureOpen();
+        final int liveStreamId = nextStreamId.getAndAdd(2);
+        if (liveStreamId <= 0 || liveStreamId >= Integer.MAX_VALUE)
+        {
+            throw new IllegalStateException("No more request-specific Aeron stream IDs are available");
+        }
+        final int replayStreamId = liveStreamId + 1;
         final long recordingSubscriptionId =
-            archive.startRecording(LIVE_CHANNEL, LIVE_STREAM_ID, SourceLocation.LOCAL);
+            archive.startRecording(LIVE_CHANNEL, liveStreamId, SourceLocation.LOCAL);
         System.out.println("RECORDING_STARTED subscriptionId=" + recordingSubscriptionId +
-            " channel=" + LIVE_CHANNEL + " streamId=" + LIVE_STREAM_ID);
+            " channel=" + LIVE_CHANNEL + " streamId=" + liveStreamId);
 
         final long publicationStopPosition;
         final long archivePosition;
-        try (ExclusivePublication publication = aeron.addExclusivePublication(LIVE_CHANNEL, LIVE_STREAM_ID))
+        try (ExclusivePublication publication = aeron.addExclusivePublication(LIVE_CHANNEL, liveStreamId))
         {
             await(publication::isConnected, "publication connection to Archive recording");
             System.out.println("PUBLICATION_CONNECTED sessionId=" + publication.sessionId());
@@ -151,7 +161,7 @@ public final class AeronArchiveGateway implements AutoCloseable
             System.out.println("RECORDING_STOPPED subscriptionId=" + recordingSubscriptionId);
         }
 
-        final RecordingDescriptor descriptor = queryRecording();
+        final RecordingDescriptor descriptor = queryRecording(liveStreamId, publicationStopPosition);
         if (descriptor.getStopPosition() != publicationStopPosition)
         {
             throw new IllegalStateException(
@@ -168,7 +178,9 @@ public final class AeronArchiveGateway implements AutoCloseable
             descriptor.getStopPosition(),
             publicationStopPosition,
             archivePosition,
-            archiveDirectory);
+            archiveDirectory,
+            liveStreamId,
+            replayStreamId);
     }
 
     public List<TradingEvent> replay(final Recording recording, final int expectedEventCount)
@@ -180,18 +192,19 @@ public final class AeronArchiveGateway implements AutoCloseable
             recording.getStartPosition(),
             replayLength,
             REPLAY_CHANNEL,
-            REPLAY_STREAM_ID);
+            recording.getReplayStreamId());
         final String replaySessionChannel = ChannelUri.addSessionId(REPLAY_CHANNEL, (int)replaySessionId);
         System.out.println("REPLAY_STARTED recordingId=" + recording.getRecordingId() +
             " replaySessionId=" + replaySessionId +
-            " channel=" + REPLAY_CHANNEL + " streamId=" + REPLAY_STREAM_ID);
+            " channel=" + REPLAY_CHANNEL + " streamId=" + recording.getReplayStreamId());
 
         final List<TradingEvent> replayedEvents = new ArrayList<>(expectedEventCount);
-        try (Subscription replaySubscription = aeron.addSubscription(replaySessionChannel, REPLAY_STREAM_ID))
+        try (Subscription replaySubscription =
+                 aeron.addSubscription(replaySessionChannel, recording.getReplayStreamId()))
         {
             await(replaySubscription::isConnected, "independent Archive replay subscription");
             System.out.println("REPLAY_SUBSCRIPTION_CONNECTED channel=" + replaySessionChannel +
-                " streamId=" + REPLAY_STREAM_ID);
+                " streamId=" + recording.getReplayStreamId());
 
             final long deadline = System.nanoTime() + OPERATION_TIMEOUT.toNanos();
             while (replayedEvents.size() < expectedEventCount)
@@ -230,33 +243,53 @@ public final class AeronArchiveGateway implements AutoCloseable
         return List.copyOf(replayedEvents);
     }
 
-    private RecordingDescriptor queryRecording()
+    private RecordingDescriptor queryRecording(final int liveStreamId, final long expectedStopPosition)
     {
-        final AtomicLong queriedId = new AtomicLong(-1);
-        final AtomicLong startPosition = new AtomicLong(-1);
-        final AtomicLong stopPosition = new AtomicLong(-1);
-        final int recordingCount = archive.listRecordingsForUri(
-            0,
-            100,
-            LIVE_CHANNEL,
-            LIVE_STREAM_ID,
-            (controlSessionId, correlationId, recordingId, startTimestamp, stopTimestamp,
-             descriptorStartPosition, descriptorStopPosition, initialTermId, segmentFileLength,
-             termBufferLength, mtuLength, sessionId, streamId, strippedChannel, originalChannel,
-             sourceIdentity) ->
-            {
-                queriedId.set(recordingId);
-                startPosition.set(descriptorStartPosition);
-                stopPosition.set(descriptorStopPosition);
-            });
-
-        if (recordingCount != 1 || queriedId.get() < 0)
+        final long deadline = System.nanoTime() + OPERATION_TIMEOUT.toNanos();
+        while (true)
         {
-            throw new IllegalStateException(
-                "Expected one matching Archive recording but found count=" + recordingCount +
-                    ", id=" + queriedId.get());
+            final AtomicLong queriedId = new AtomicLong(-1);
+            final AtomicLong startPosition = new AtomicLong(-1);
+            final AtomicLong stopPosition = new AtomicLong(-1);
+            final int recordingCount = archive.listRecordingsForUri(
+                0,
+                100,
+                LIVE_CHANNEL,
+                liveStreamId,
+                (controlSessionId, correlationId, recordingId, startTimestamp, stopTimestamp,
+                 descriptorStartPosition, descriptorStopPosition, initialTermId, segmentFileLength,
+                 termBufferLength, mtuLength, sessionId, streamId, strippedChannel, originalChannel,
+                 sourceIdentity) ->
+                {
+                    queriedId.set(recordingId);
+                    startPosition.set(descriptorStartPosition);
+                    stopPosition.set(descriptorStopPosition);
+                });
+
+            if (recordingCount != 1 || queriedId.get() < 0)
+            {
+                throw new IllegalStateException(
+                    "Expected one matching Archive recording but found count=" + recordingCount +
+                        ", id=" + queriedId.get());
+            }
+            if (stopPosition.get() == expectedStopPosition)
+            {
+                return new RecordingDescriptor(queriedId.get(), startPosition.get(), stopPosition.get());
+            }
+            if (stopPosition.get() >= 0)
+            {
+                throw new IllegalStateException(
+                    "Archive stop position " + stopPosition.get() +
+                        " differs from publication position " + expectedStopPosition);
+            }
+            if (System.nanoTime() >= deadline)
+            {
+                throw new IllegalStateException(
+                    "Timed out waiting for Archive catalog stop position; expected=" + expectedStopPosition +
+                        ", actual=" + stopPosition.get());
+            }
+            LockSupport.parkNanos(100_000);
         }
-        return new RecordingDescriptor(queriedId.get(), startPosition.get(), stopPosition.get());
     }
 
     private void offerWithBackPressure(
@@ -346,6 +379,12 @@ public final class AeronArchiveGateway implements AutoCloseable
         }
     }
 
+    @Override
+    public void destroy()
+    {
+        close();
+    }
+
     public static final class Recording
     {
         private final long recordingId;
@@ -354,6 +393,8 @@ public final class AeronArchiveGateway implements AutoCloseable
         private final long publicationStopPosition;
         private final long archiveRecordedPosition;
         private final Path archiveDirectory;
+        private final int liveStreamId;
+        private final int replayStreamId;
 
         Recording(
             final long recordingId,
@@ -361,7 +402,9 @@ public final class AeronArchiveGateway implements AutoCloseable
             final long stopPosition,
             final long publicationStopPosition,
             final long archiveRecordedPosition,
-            final Path archiveDirectory)
+            final Path archiveDirectory,
+            final int liveStreamId,
+            final int replayStreamId)
         {
             this.recordingId = recordingId;
             this.startPosition = startPosition;
@@ -369,6 +412,8 @@ public final class AeronArchiveGateway implements AutoCloseable
             this.publicationStopPosition = publicationStopPosition;
             this.archiveRecordedPosition = archiveRecordedPosition;
             this.archiveDirectory = archiveDirectory;
+            this.liveStreamId = liveStreamId;
+            this.replayStreamId = replayStreamId;
         }
 
         public long getRecordingId()
@@ -399,6 +444,16 @@ public final class AeronArchiveGateway implements AutoCloseable
         public Path getArchiveDirectory()
         {
             return archiveDirectory;
+        }
+
+        public int getLiveStreamId()
+        {
+            return liveStreamId;
+        }
+
+        public int getReplayStreamId()
+        {
+            return replayStreamId;
         }
     }
 

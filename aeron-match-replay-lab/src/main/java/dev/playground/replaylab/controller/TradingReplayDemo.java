@@ -2,14 +2,16 @@ package dev.playground.replaylab.controller;
 
 import dev.playground.replaylab.model.TradingEvent;
 import dev.playground.replaylab.service.ReplayService;
-import org.springframework.boot.CommandLineRunner;
-import org.springframework.stereotype.Component;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
 import java.util.List;
 
-@Component
-public final class TradingReplayDemo implements CommandLineRunner
+@RestController
+@RequestMapping("/api/demo")
+public final class TradingReplayDemo
 {
     private final ReplayService replayService;
 
@@ -26,17 +28,59 @@ public final class TradingReplayDemo implements CommandLineRunner
         this.replayService = replayService;
     }
 
-    @Override
-    public void run(final String... args) throws IOException
+    @PostMapping("/roundtrip")
+    public RoundTripResponse roundTrip() throws IOException
     {
-        System.out.println("=== Phase 2: real Aeron Archive record and replay ===");
         final ReplayService.Result result = replayService.recordReplayAndVerify(DEMO_EVENTS);
-        System.out.println("RECORDING_ID=" + result.getRecordingId());
-        System.out.println("REPLAYED_TRADING_STATE=" + result.getReconstructedState());
+        return new RoundTripResponse(
+            result.getRecordingId(),
+            result.getPublishedEvents(),
+            result.getReplayedEventCount(),
+            result.isStateMatched());
     }
 
     public static List<TradingEvent> demoEvents()
     {
         return DEMO_EVENTS;
+    }
+
+    public static final class RoundTripResponse
+    {
+        private final long recordingId;
+        private final int publishedEvents;
+        private final int replayedEvents;
+        private final boolean stateMatched;
+
+        RoundTripResponse(
+            final long recordingId,
+            final int publishedEvents,
+            final int replayedEvents,
+            final boolean stateMatched)
+        {
+            this.recordingId = recordingId;
+            this.publishedEvents = publishedEvents;
+            this.replayedEvents = replayedEvents;
+            this.stateMatched = stateMatched;
+        }
+
+        public long getRecordingId()
+        {
+            return recordingId;
+        }
+
+        public int getPublishedEvents()
+        {
+            return publishedEvents;
+        }
+
+        public int getReplayedEvents()
+        {
+            return replayedEvents;
+        }
+
+        public boolean isStateMatched()
+        {
+            return stateMatched;
+        }
     }
 }
