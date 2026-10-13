@@ -1,4 +1,6 @@
-package dev.playground.replaylab;
+package dev.playground.replaylab.codec;
+
+import dev.playground.replaylab.model.TradingEvent;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -6,7 +8,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 
-final class TradingEventCodec
+public final class TradingEventCodec
 {
     private static final int ORDER_PLACED = 1;
     private static final int TRADE_EXECUTED = 2;
@@ -16,7 +18,7 @@ final class TradingEventCodec
     {
     }
 
-    static byte[] encode(final TradingEvent event) throws IOException
+    public static byte[] encode(final TradingEvent event) throws IOException
     {
         final ByteArrayOutputStream bytes = new ByteArrayOutputStream(96);
         try (DataOutputStream output = new DataOutputStream(bytes))
@@ -56,7 +58,7 @@ final class TradingEventCodec
         return bytes.toByteArray();
     }
 
-    static TradingEvent decode(final byte[] encoded) throws IOException
+    public static TradingEvent decode(final byte[] encoded) throws IOException
     {
         try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(encoded)))
         {

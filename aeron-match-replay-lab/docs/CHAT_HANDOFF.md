@@ -10,6 +10,25 @@ Updated: 2026-10-13
 - Phase 1 implementation and handoff notes pushed to GitHub as `d3f4e93f4ef8c5b684892eb7deb4b43c3c1c9720`; local, tracking, and live remote SHAs matched after push.
 - No repository `AGENTS.md`, README, prior planning file, or prior handoff file was present when this note was created.
 
+## Java source layout
+
+```text
+src/main/java/dev/playground/replaylab/
+  AeronMatchReplayLabApplication.java
+  controller/TradingReplayDemo.java
+  service/ReplayService.java
+  gateway/AeronArchiveGateway.java
+  codec/TradingEventCodec.java
+  model/TradingEvent.java
+  model/TradingState.java
+
+src/test/java/dev/playground/replaylab/
+  service/AeronArchiveRoundTripTest.java
+  model/TradingStateTest.java
+```
+
+The Spring Boot application class stays in the root package so component scanning includes the subpackages.
+
 ## User-supplied architecture update
 
 The learning story is now a latency-sensitive upstream publisher, Aeron transport and Archive recording, and an independently restartable downstream consumer that replays missed events and catches up with the live stream. Treat this as a simplified learning hypothesis; do not claim the user's OKX team had these exact processes or downstream workloads.

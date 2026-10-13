@@ -1,4 +1,6 @@
-package dev.playground.replaylab;
+package dev.playground.replaylab.model;
+
+import dev.playground.replaylab.controller.TradingReplayDemo;
 
 import org.junit.jupiter.api.Test;
 

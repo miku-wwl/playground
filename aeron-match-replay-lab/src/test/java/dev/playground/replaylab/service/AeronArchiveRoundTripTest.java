@@ -1,5 +1,7 @@
-package dev.playground.replaylab;
+package dev.playground.replaylab.service;
 
+import dev.playground.replaylab.controller.TradingReplayDemo;
+import dev.playground.replaylab.model.TradingEvent;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
@@ -23,10 +25,8 @@ class AeronArchiveRoundTripTest
 
         assertEquals(events, result.getReplayedEvents());
         assertEquals(events.size(), result.getReplayedEvents().size());
-        assertEquals(
-            result.getRecording().getPublicationStopPosition(),
-            result.getRecording().getArchiveRecordedPosition());
-        assertTrue(result.getRecording().getRecordingId() >= 0);
+        assertEquals(result.getPublicationStopPosition(), result.getArchiveRecordedPosition());
+        assertTrue(result.getRecordingId() >= 0);
         assertEquals(6, result.getReconstructedState().getLastProcessedSequenceNumber());
     }
 }

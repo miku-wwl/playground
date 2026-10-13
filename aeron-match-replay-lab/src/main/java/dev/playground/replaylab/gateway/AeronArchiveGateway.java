@@ -1,5 +1,7 @@
-package dev.playground.replaylab;
+package dev.playground.replaylab.gateway;
 
+import dev.playground.replaylab.codec.TradingEventCodec;
+import dev.playground.replaylab.model.TradingEvent;
 import io.aeron.Aeron;
 import io.aeron.ChannelUri;
 import io.aeron.ExclusivePublication;
@@ -24,7 +26,7 @@ import java.util.concurrent.locks.LockSupport;
 import java.util.function.BooleanSupplier;
 
 /** Owns the real Aeron and Aeron Archive connections used by a single round trip. */
-final class AeronArchiveGateway implements AutoCloseable
+public final class AeronArchiveGateway implements AutoCloseable
 {
     private static final String LIVE_CHANNEL = "aeron:ipc";
     private static final String REPLAY_CHANNEL = "aeron:ipc";
@@ -48,7 +50,7 @@ final class AeronArchiveGateway implements AutoCloseable
         this.archiveDirectory = archiveDirectory;
     }
 
-    static AeronArchiveGateway open(final Path outputDirectory) throws IOException
+    public static AeronArchiveGateway open(final Path outputDirectory) throws IOException
     {
         Files.createDirectories(outputDirectory);
         final Path runDirectory = Files.createTempDirectory(outputDirectory, "run-");
@@ -101,7 +103,7 @@ final class AeronArchiveGateway implements AutoCloseable
         }
     }
 
-    Recording record(final List<TradingEvent> events) throws IOException
+    public Recording record(final List<TradingEvent> events) throws IOException
     {
         ensureOpen();
         final long recordingSubscriptionId =
@@ -169,7 +171,7 @@ final class AeronArchiveGateway implements AutoCloseable
             archiveDirectory);
     }
 
-    List<TradingEvent> replay(final Recording recording, final int expectedEventCount)
+    public List<TradingEvent> replay(final Recording recording, final int expectedEventCount)
     {
         ensureOpen();
         final long replayLength = recording.getStopPosition() - recording.getStartPosition();
@@ -344,7 +346,7 @@ final class AeronArchiveGateway implements AutoCloseable
         }
     }
 
-    static final class Recording
+    public static final class Recording
     {
         private final long recordingId;
         private final long startPosition;
@@ -369,32 +371,32 @@ final class AeronArchiveGateway implements AutoCloseable
             this.archiveDirectory = archiveDirectory;
         }
 
-        long getRecordingId()
+        public long getRecordingId()
         {
             return recordingId;
         }
 
-        long getStartPosition()
+        public long getStartPosition()
         {
             return startPosition;
         }
 
-        long getStopPosition()
+        public long getStopPosition()
         {
             return stopPosition;
         }
 
-        long getPublicationStopPosition()
+        public long getPublicationStopPosition()
         {
             return publicationStopPosition;
         }
 
-        long getArchiveRecordedPosition()
+        public long getArchiveRecordedPosition()
         {
             return archiveRecordedPosition;
         }
 
-        Path getArchiveDirectory()
+        public Path getArchiveDirectory()
         {
             return archiveDirectory;
         }

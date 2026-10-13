@@ -1,5 +1,8 @@
-package dev.playground.replaylab;
+package dev.playground.replaylab.service;
 
+import dev.playground.replaylab.gateway.AeronArchiveGateway;
+import dev.playground.replaylab.model.TradingEvent;
+import dev.playground.replaylab.model.TradingState;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -9,21 +12,21 @@ import java.util.Objects;
 
 /** Coordinates a Phase 2 record, replay, and business-state verification. */
 @Component
-final class ReplayService
+public final class ReplayService
 {
     private final Path outputDirectory;
 
-    ReplayService()
+    public ReplayService()
     {
         this(Path.of("target", "aeron-phase2-runs"));
     }
 
-    ReplayService(final Path outputDirectory)
+    public ReplayService(final Path outputDirectory)
     {
         this.outputDirectory = Objects.requireNonNull(outputDirectory, "outputDirectory");
     }
 
-    Result recordReplayAndVerify(final List<TradingEvent> events) throws IOException
+    public Result recordReplayAndVerify(final List<TradingEvent> events) throws IOException
     {
         Objects.requireNonNull(events, "events");
         if (events.isEmpty())
@@ -51,37 +54,58 @@ final class ReplayService
             System.out.println("ROUND_TRIP_EVENTS=" + replayedEvents.size() + "/" + events.size());
             System.out.println("ROUND_TRIP_ORDER_MATCH=PASS");
             System.out.println("STATE_RECONSTRUCTION=PASS");
-            return new Result(recording, replayedEvents, state.snapshot());
+            return new Result(
+                recording.getRecordingId(),
+                recording.getPublicationStopPosition(),
+                recording.getArchiveRecordedPosition(),
+                replayedEvents,
+                state.snapshot());
         }
     }
 
-    static final class Result
+    public static final class Result
     {
-        private final AeronArchiveGateway.Recording recording;
+        private final long recordingId;
+        private final long publicationStopPosition;
+        private final long archiveRecordedPosition;
         private final List<TradingEvent> replayedEvents;
         private final TradingState.Snapshot reconstructedState;
 
         Result(
-            final AeronArchiveGateway.Recording recording,
+            final long recordingId,
+            final long publicationStopPosition,
+            final long archiveRecordedPosition,
             final List<TradingEvent> replayedEvents,
             final TradingState.Snapshot reconstructedState)
         {
-            this.recording = recording;
+            this.recordingId = recordingId;
+            this.publicationStopPosition = publicationStopPosition;
+            this.archiveRecordedPosition = archiveRecordedPosition;
             this.replayedEvents = List.copyOf(replayedEvents);
             this.reconstructedState = reconstructedState;
         }
 
-        AeronArchiveGateway.Recording getRecording()
+        public long getRecordingId()
         {
-            return recording;
+            return recordingId;
         }
 
-        List<TradingEvent> getReplayedEvents()
+        public long getPublicationStopPosition()
+        {
+            return publicationStopPosition;
+        }
+
+        public long getArchiveRecordedPosition()
+        {
+            return archiveRecordedPosition;
+        }
+
+        public List<TradingEvent> getReplayedEvents()
         {
             return replayedEvents;
         }
 
-        TradingState.Snapshot getReconstructedState()
+        public TradingState.Snapshot getReconstructedState()
         {
             return reconstructedState;
         }

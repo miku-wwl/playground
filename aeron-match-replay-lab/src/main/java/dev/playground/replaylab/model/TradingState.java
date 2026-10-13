@@ -1,4 +1,4 @@
-package dev.playground.replaylab;
+package dev.playground.replaylab.model;
 
 import java.util.Collections;
 import java.util.HashMap;

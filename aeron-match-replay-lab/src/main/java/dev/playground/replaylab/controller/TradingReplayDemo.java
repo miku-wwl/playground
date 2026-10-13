@@ -1,5 +1,7 @@
-package dev.playground.replaylab;
+package dev.playground.replaylab.controller;
 
+import dev.playground.replaylab.model.TradingEvent;
+import dev.playground.replaylab.service.ReplayService;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
@@ -29,11 +31,11 @@ public final class TradingReplayDemo implements CommandLineRunner
     {
         System.out.println("=== Phase 2: real Aeron Archive record and replay ===");
         final ReplayService.Result result = replayService.recordReplayAndVerify(DEMO_EVENTS);
-        System.out.println("RECORDING_ID=" + result.getRecording().getRecordingId());
+        System.out.println("RECORDING_ID=" + result.getRecordingId());
         System.out.println("REPLAYED_TRADING_STATE=" + result.getReconstructedState());
     }
 
-    static List<TradingEvent> demoEvents()
+    public static List<TradingEvent> demoEvents()
     {
         return DEMO_EVENTS;
     }
