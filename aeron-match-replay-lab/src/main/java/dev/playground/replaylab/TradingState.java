@@ -16,33 +16,33 @@ public final class TradingState
     public void apply(final TradingEvent event)
     {
         Objects.requireNonNull(event, "event");
-        validateSequence(event.sequenceNumber());
+        validateSequence(event.getSequenceNumber());
 
-        if (event instanceof TradingEvent.OrderPlaced placed)
+        if (event instanceof TradingEvent.OrderPlaced)
         {
-            apply(placed);
+            apply((TradingEvent.OrderPlaced)event);
         }
-        else if (event instanceof TradingEvent.TradeExecuted trade)
+        else if (event instanceof TradingEvent.TradeExecuted)
         {
-            apply(trade);
+            apply((TradingEvent.TradeExecuted)event);
         }
-        else if (event instanceof TradingEvent.OrderCancelled cancelled)
+        else if (event instanceof TradingEvent.OrderCancelled)
         {
-            apply(cancelled);
+            apply((TradingEvent.OrderCancelled)event);
         }
         else
         {
             throw new IllegalArgumentException("Unsupported event type: " + event.getClass().getName());
         }
 
-        lastProcessedSequenceNumber = event.sequenceNumber();
+        lastProcessedSequenceNumber = event.getSequenceNumber();
     }
 
     public Snapshot snapshot()
     {
         return new Snapshot(
             lastProcessedSequenceNumber,
-            Collections.unmodifiableMap(new TreeMap<>(activeOrders)),
+            activeOrders,
             executedTradeCount,
             cumulativeTradedQuantity);
     }
@@ -64,52 +64,54 @@ public final class TradingState
 
     private void apply(final TradingEvent.OrderPlaced event)
     {
-        validateText(event.orderId(), "orderId");
-        validatePositive(event.price(), "price");
-        validatePositive(event.quantity(), "quantity");
-        if (activeOrders.containsKey(event.orderId()))
+        validateText(event.getOrderId(), "orderId");
+        validatePositive(event.getPrice(), "price");
+        validatePositive(event.getQuantity(), "quantity");
+        if (activeOrders.containsKey(event.getOrderId()))
         {
-            throw new IllegalStateException("Order already active: " + event.orderId());
+            throw new IllegalStateException("Order already active: " + event.getOrderId());
         }
 
         activeOrders.put(
-            event.orderId(), new ActiveOrder(event.orderId(), event.side(), event.price(), event.quantity()));
+            event.getOrderId(),
+            new ActiveOrder(event.getOrderId(), event.getSide(), event.getPrice(), event.getQuantity()));
     }
 
     private void apply(final TradingEvent.TradeExecuted event)
     {
-        validatePositive(event.price(), "trade price");
-        validatePositive(event.quantity(), "trade quantity");
-        if (event.buyOrderId().equals(event.sellOrderId()))
+        validatePositive(event.getPrice(), "trade price");
+        validatePositive(event.getQuantity(), "trade quantity");
+        if (event.getBuyOrderId().equals(event.getSellOrderId()))
         {
             throw new IllegalStateException("A trade must reference two different orders");
         }
 
-        final ActiveOrder buyOrder = requireActiveOrder(event.buyOrderId());
-        final ActiveOrder sellOrder = requireActiveOrder(event.sellOrderId());
-        if (buyOrder.side() != TradingEvent.Side.BUY || sellOrder.side() != TradingEvent.Side.SELL)
+        final ActiveOrder buyOrder = requireActiveOrder(event.getBuyOrderId());
+        final ActiveOrder sellOrder = requireActiveOrder(event.getSellOrderId());
+        if (buyOrder.getSide() != TradingEvent.Side.BUY || sellOrder.getSide() != TradingEvent.Side.SELL)
         {
             throw new IllegalStateException("Trade order sides do not match buy and sell roles");
         }
-        if (event.quantity() > buyOrder.remainingQuantity() || event.quantity() > sellOrder.remainingQuantity())
+        if (event.getQuantity() > buyOrder.getRemainingQuantity() ||
+            event.getQuantity() > sellOrder.getRemainingQuantity())
         {
             throw new IllegalStateException("Trade quantity exceeds an order's remaining quantity");
         }
 
         final long nextTradeCount = Math.addExact(executedTradeCount, 1);
-        final long nextTradedQuantity = Math.addExact(cumulativeTradedQuantity, event.quantity());
-        updateRemainingQuantity(buyOrder, event.quantity());
-        updateRemainingQuantity(sellOrder, event.quantity());
+        final long nextTradedQuantity = Math.addExact(cumulativeTradedQuantity, event.getQuantity());
+        updateRemainingQuantity(buyOrder, event.getQuantity());
+        updateRemainingQuantity(sellOrder, event.getQuantity());
         executedTradeCount = nextTradeCount;
         cumulativeTradedQuantity = nextTradedQuantity;
     }
 
     private void apply(final TradingEvent.OrderCancelled event)
     {
-        validateText(event.orderId(), "orderId");
-        if (activeOrders.remove(event.orderId()) == null)
+        validateText(event.getOrderId(), "orderId");
+        if (activeOrders.remove(event.getOrderId()) == null)
         {
-            throw new IllegalStateException("Cannot cancel an inactive order: " + event.orderId());
+            throw new IllegalStateException("Cannot cancel an inactive order: " + event.getOrderId());
         }
     }
 
@@ -125,16 +127,16 @@ public final class TradingState
 
     private void updateRemainingQuantity(final ActiveOrder order, final long tradedQuantity)
     {
-        final long remainingQuantity = order.remainingQuantity() - tradedQuantity;
+        final long remainingQuantity = order.getRemainingQuantity() - tradedQuantity;
         if (remainingQuantity == 0)
         {
-            activeOrders.remove(order.orderId());
+            activeOrders.remove(order.getOrderId());
         }
         else
         {
             activeOrders.put(
-                order.orderId(),
-                new ActiveOrder(order.orderId(), order.side(), order.price(), remainingQuantity));
+                order.getOrderId(),
+                new ActiveOrder(order.getOrderId(), order.getSide(), order.getPrice(), remainingQuantity));
         }
     }
 
@@ -154,15 +156,150 @@ public final class TradingState
         }
     }
 
-    public record ActiveOrder(String orderId, TradingEvent.Side side, long price, long remainingQuantity)
+    public static final class ActiveOrder
     {
+        private final String orderId;
+        private final TradingEvent.Side side;
+        private final long price;
+        private final long remainingQuantity;
+
+        public ActiveOrder(
+            final String orderId,
+            final TradingEvent.Side side,
+            final long price,
+            final long remainingQuantity)
+        {
+            this.orderId = Objects.requireNonNull(orderId, "orderId");
+            this.side = Objects.requireNonNull(side, "side");
+            this.price = price;
+            this.remainingQuantity = remainingQuantity;
+        }
+
+        public String getOrderId()
+        {
+            return orderId;
+        }
+
+        public TradingEvent.Side getSide()
+        {
+            return side;
+        }
+
+        public long getPrice()
+        {
+            return price;
+        }
+
+        public long getRemainingQuantity()
+        {
+            return remainingQuantity;
+        }
+
+        @Override
+        public boolean equals(final Object other)
+        {
+            if (this == other)
+            {
+                return true;
+            }
+            if (!(other instanceof ActiveOrder))
+            {
+                return false;
+            }
+            final ActiveOrder that = (ActiveOrder)other;
+            return price == that.price &&
+                remainingQuantity == that.remainingQuantity &&
+                orderId.equals(that.orderId) &&
+                side == that.side;
+        }
+
+        @Override
+        public int hashCode()
+        {
+            return Objects.hash(orderId, side, price, remainingQuantity);
+        }
+
+        @Override
+        public String toString()
+        {
+            return "ActiveOrder[orderId=" + orderId +
+                ", side=" + side +
+                ", price=" + price +
+                ", remainingQuantity=" + remainingQuantity + "]";
+        }
     }
 
-    public record Snapshot(
-        long lastProcessedSequenceNumber,
-        Map<String, ActiveOrder> activeOrders,
-        long executedTradeCount,
-        long cumulativeTradedQuantity)
+    public static final class Snapshot
     {
+        private final long lastProcessedSequenceNumber;
+        private final Map<String, ActiveOrder> activeOrders;
+        private final long executedTradeCount;
+        private final long cumulativeTradedQuantity;
+
+        public Snapshot(
+            final long lastProcessedSequenceNumber,
+            final Map<String, ActiveOrder> activeOrders,
+            final long executedTradeCount,
+            final long cumulativeTradedQuantity)
+        {
+            this.lastProcessedSequenceNumber = lastProcessedSequenceNumber;
+            this.activeOrders = Collections.unmodifiableMap(new TreeMap<>(activeOrders));
+            this.executedTradeCount = executedTradeCount;
+            this.cumulativeTradedQuantity = cumulativeTradedQuantity;
+        }
+
+        public long getLastProcessedSequenceNumber()
+        {
+            return lastProcessedSequenceNumber;
+        }
+
+        public Map<String, ActiveOrder> getActiveOrders()
+        {
+            return activeOrders;
+        }
+
+        public long getExecutedTradeCount()
+        {
+            return executedTradeCount;
+        }
+
+        public long getCumulativeTradedQuantity()
+        {
+            return cumulativeTradedQuantity;
+        }
+
+        @Override
+        public boolean equals(final Object other)
+        {
+            if (this == other)
+            {
+                return true;
+            }
+            if (!(other instanceof Snapshot))
+            {
+                return false;
+            }
+            final Snapshot that = (Snapshot)other;
+            return lastProcessedSequenceNumber == that.lastProcessedSequenceNumber &&
+                executedTradeCount == that.executedTradeCount &&
+                cumulativeTradedQuantity == that.cumulativeTradedQuantity &&
+                activeOrders.equals(that.activeOrders);
+        }
+
+        @Override
+        public int hashCode()
+        {
+            return Objects.hash(
+                lastProcessedSequenceNumber, activeOrders, executedTradeCount, cumulativeTradedQuantity);
+        }
+
+        @Override
+        public String toString()
+        {
+            return "Snapshot[lastProcessedSequenceNumber=" + lastProcessedSequenceNumber +
+                ", activeOrders=" + activeOrders +
+                ", executedTradeCount=" + executedTradeCount +
+                ", cumulativeTradedQuantity=" + cumulativeTradedQuantity + "]";
+        }
     }
 }

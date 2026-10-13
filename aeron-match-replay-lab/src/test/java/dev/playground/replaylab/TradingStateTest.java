@@ -16,10 +16,10 @@ class TradingStateTest
         final TradingState.Snapshot secondReplay = replayAllDemoEvents();
 
         assertEquals(firstReplay, secondReplay);
-        assertEquals(6, firstReplay.lastProcessedSequenceNumber());
-        assertEquals(2, firstReplay.executedTradeCount());
-        assertEquals(7, firstReplay.cumulativeTradedQuantity());
-        assertEquals(3, firstReplay.activeOrders().get("B-1001").remainingQuantity());
+        assertEquals(6, firstReplay.getLastProcessedSequenceNumber());
+        assertEquals(2, firstReplay.getExecutedTradeCount());
+        assertEquals(7, firstReplay.getCumulativeTradedQuantity());
+        assertEquals(3, firstReplay.getActiveOrders().get("B-1001").getRemainingQuantity());
     }
 
     @Test
