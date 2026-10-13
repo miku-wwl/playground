@@ -4,7 +4,11 @@ from agent_lab.core.agent import AgentLoop, MaxStepsExceeded
 from agent_lab.core.history import MessageHistory
 from agent_lab.models.decisions import ToolCallDecision
 from agent_lab.models.fake_model import FakeModelClient
-from agent_lab.tools.demo_tools import create_demo_tool_registry, get_my_balance
+from agent_lab.tools.demo_tools import (
+    create_demo_tool_registry,
+    get_my_balance,
+    get_order_status,
+)
 from agent_lab.tools.dispatcher import ToolDispatcher
 from agent_lab.tools.registry import ToolRegistry
 
@@ -13,6 +17,13 @@ def test_demo_balance_tool_reads_simulated_user_data() -> None:
     assert get_my_balance(user_id="user-123", asset="USDT") == {
         "asset": "USDT",
         "balance": 500,
+    }
+
+
+def test_demo_order_tool_reads_current_users_simulated_order() -> None:
+    assert get_order_status(user_id="user-123", order_id="ORD-001") == {
+        "order_id": "ORD-001",
+        "status": "FILLED",
     }
 
 

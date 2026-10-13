@@ -1,6 +1,8 @@
 from agent_lab.core.history import MessageHistory
 from agent_lab.models.decisions import FinalAnswerDecision, ToolCallDecision
-from agent_lab.models.fake_model import FakeModelClient
+from typing import Protocol
+
+from agent_lab.models.decisions import ModelDecision
 from agent_lab.tools.dispatcher import ToolDispatcher
 
 
@@ -8,10 +10,15 @@ class MaxStepsExceeded(RuntimeError):
     pass
 
 
+class ModelClient(Protocol):
+    def decide(self, history: MessageHistory) -> ModelDecision:
+        """Return the model's next structured decision."""
+
+
 class AgentLoop:
     """Repeats model decision → optional tool execution until a final answer."""
 
-    def __init__(self, model: FakeModelClient, dispatcher: ToolDispatcher, max_steps: int = 5) -> None:
+    def __init__(self, model: ModelClient, dispatcher: ToolDispatcher, max_steps: int = 5) -> None:
         if max_steps < 1:
             raise ValueError("max_steps must be at least 1")
         self._model = model

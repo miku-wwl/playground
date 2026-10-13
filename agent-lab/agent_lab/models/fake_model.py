@@ -3,7 +3,7 @@ from agent_lab.models.decisions import FinalAnswerDecision, ModelDecision, ToolC
 
 
 class FakeModelClient:
-    """A scripted model: call the balance tool, then answer from its result."""
+    """A deterministic model double for repeatable Agent and unit tests."""
 
     def decide(self, history: MessageHistory) -> ModelDecision:
         result = history.latest_tool_result()
