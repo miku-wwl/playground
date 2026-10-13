@@ -1,6 +1,6 @@
 # Chat Handoff — Aeron Match Replay Lab
 
-Updated: 2026-10-13
+Updated: 2026-10-14
 
 ## Current checkout
 
@@ -21,6 +21,10 @@ src/main/java/dev/playground/replaylab/
   codec/TradingEventCodec.java
   model/TradingEvent.java
   model/TradingState.java
+  phase3/Phase3ArchiveProcess.java
+  phase3/Phase3PublisherProcess.java
+  phase3/Phase3ConsumerProcess.java
+  phase3/Phase3ProcessSupport.java
 
 src/test/java/dev/playground/replaylab/
   service/AeronArchiveRoundTripTest.java
@@ -46,6 +50,16 @@ The most important Phase 3 change is from a single-process reset/replay demo to 
 - Each application startup writes to a unique folder under `target/aeron-phase2-runs`; requests within that app share one Archive but use separate streams. This validates same-process recording/replay and HTTP request isolation, not multi-JVM recovery or crash durability.
 - The architecture refinement notes that a canonical state digest and a downstream event vocabulary including `OrderStatusChanged` have not yet been implemented. Preserve the Phase 1 results and surface this gap when planning subsequent work.
 
+## Phase 3 result — PASS
+
+- `scripts/run-phase3-demo.ps1` runs the full existing Maven suite, then coordinates separate Archive/MediaDriver, Publisher, and Consumer JVMs on local Aeron IPC.
+- Verified run directory: `target/aeron-phase3-runs/run-20261014-003738-141`. The initial consumer processed sequences 1–2, then the harness forcibly stopped its JVM. The publisher and Archive continued recording sequences 3–6.
+- The restarted consumer replayed sequences 1–4 from recording ID `0` through Archive position `352`, skipped overlapping live sequences 3–4, applied live sequences 5–6, and printed `STATE_RECOVERY=PASS`.
+- Final expected state: last sequence `6`; one active BUY order `B-1001`, price `101`, remaining quantity `3`; trade count `2`; cumulative traded quantity `7`. The recording advanced through position `544` after all six events.
+- All 5 Maven tests passed. The runner preserves per-process stdout/stderr logs and Archive files under the run directory.
+- This is a single-machine consumer-restart experiment with real Aeron Archive, not host-level HA, guaranteed disk durability, or evidence of the exact OKX design.
+- One learning simplification remains: Phase 3 verifies explicit expected snapshot fields rather than a canonical state hash. Do not describe it as hash comparison.
+
 ## Technical boundaries to keep visible
 
 - Do not equate a business sequence number with an Aeron recording position.
@@ -55,4 +69,4 @@ The most important Phase 3 change is from a single-process reset/replay demo to 
 
 ## Continuation
 
-Next unfinished phase: **Phase 3 — Distributed Consumer Recovery**. Wait for the user to say `继续 Phase 3`; keep the project one phase at a time.
+Next unfinished phase: **Phase 4 — Reliability Interview Drills**. Phase 3 is complete; stop and wait for the user to say `继续 Phase 4` before adding failure-injection experiments.

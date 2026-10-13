@@ -1,6 +1,6 @@
 # Agent State — Aeron Match Replay Lab
 
-Updated: 2026-10-13
+Updated: 2026-10-14
 
 ## Purpose and trust boundary
 
@@ -65,10 +65,19 @@ The desired producer isolation is a goal to validate, not an assumption: channel
 - Agrona 2.6.1 requires opening `java.base/jdk.internal.misc` for `org.agrona.UnsafeApi`; Maven Surefire and Spring Boot run are configured with `--add-opens=java.base/jdk.internal.misc=ALL-UNNAMED`. This does not make a JAR invocation without the option work; use `mvn spring-boot:run` or pass the option to `java`.
 - Each application startup creates one fresh directory under `target/aeron-phase2-runs`; HTTP calls share that Archive instance but use request-specific streams and are serialized by the service. This proves local recording/replay and request isolation, but Phase 2 does not prove recovery across JVMs, crash durability, or production behavior. `mvn clean` removes these demo files.
 
+### Phase 3 — Independent-process consumer recovery: PASS
+
+- Added standalone process entry points under `src/main/java/dev/playground/replaylab/phase3/` and a Windows runner at `scripts/run-phase3-demo.ps1`. The existing Phase 2 Spring Boot REST flow and Aeron code remain unchanged.
+- The runner first executes `mvn test` (5 tests passed), then starts a real Archive + MediaDriver JVM, a publisher JVM, and two separate consumer JVMs. The first consumer processed live sequences 1–2 and was forcibly stopped by the PowerShell harness; the same Archive and publisher remained active.
+- Publisher stream `30001` was recorded by the real Aeron Archive. The Archive recording ID was `0`; the first two events reached recording position `192`, and the replay boundary through sequence 4 reached position `352`. Publisher then continued with sequences 5–6 and the recorded position reached `544`.
+- A fresh recovery consumer JVM replayed sequences 1–4 from the Archive, observed overlapping live sequences 3–4 and skipped them by business sequence number, then applied live sequences 5–6. It verified the expected final projection: sequence 6, one active BUY order `B-1001` at price `101` with quantity `3`, 2 trades, and cumulative quantity `7`; log result was `STATE_RECOVERY=PASS`.
+- Reproduction: run `scripts/run-phase3-demo.ps1` from the repository root. Its run artifacts and per-process logs are kept under `target/aeron-phase3-runs/run-<timestamp>`; the verified run was `run-20261014-003738-141`.
+- This demonstrates consumer-process restart and replay/live catch-up on one Windows machine using real Aeron and Archive. It does not demonstrate host-level high availability, abrupt Archive failure recovery, guaranteed disk durability, or OKX's production architecture.
+
 ### Remaining phases
 
 - **Phase 2 — Real Aeron Record/Replay: PASS.** The local embedded Archive integration and ordered six-event replay passed. Cross-process persistence is not part of this phase.
-- **Phase 3 — Distributed Consumer Recovery: NOT STARTED.** Replace the earlier single-process recovery idea with three independently managed local Java processes. The consumer must survive its own restart while the publisher continues, recover from a known recording/checkpoint, replay the gap, transition to live without loss or double application, and compare against independently calculated expected state.
+- **Phase 3 — Distributed Consumer Recovery: PASS.** Three separate JVM roles were exercised; the consumer was stopped and restarted while the publisher and Archive continued, then replayed and caught up to live without gaps or double application.
 - **Phase 4 — Failure injection and interview drills: NOT STARTED.** Cover consumer crash, duplicate replay, gaps, replay/live overlap, Archive lag, and producer/Archive failure boundaries.
 - **Phase 5 — Interview cheat sheet: NOT STARTED.** Explain the distributed downstream-recovery story and its limitations without presenting the local simulation as historical OKX implementation evidence.
 
@@ -82,4 +91,4 @@ The desired producer isolation is a goal to validate, not an assumption: channel
 
 ## Next step
 
-Continue the requested code-reading lesson in order: Controller, then Service, then Gateway, one component per user instruction. Phase 3 remains NOT STARTED; wait for the user's explicit instruction before beginning it.
+Phase 3 is complete. Stop here and wait for the user's explicit instruction `继续 Phase 4`; do not begin failure-injection drills yet.
