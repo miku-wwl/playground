@@ -20,6 +20,12 @@ python -m agent_lab.phase3_demo ticket-approval
 
 # Tests use scripted models and simulated tools
 python -m pytest -q
+
+# Phase 4 deterministic evaluation: six scripted scenarios
+python -m agent_lab.evaluation.runner --mode fake
+
+# Phase 4 live evaluation: five local Ollama scenarios, reported separately
+python -m agent_lab.evaluation.runner --mode ollama --model-name phi4-mini:latest
 ```
 
 The default model is `phi4-mini:latest`; choose another installed model with `--model-name`. The Agent, model calls, and tool calls all have limits.
@@ -31,10 +37,11 @@ agent_lab/
   core/       AgentLoop and MessageHistory
   models/     decision types, Fake Model, and Ollama client
   tools/      schemas, registry, dispatcher, approval state, demo tools
+  evaluation/ JSONL trace writer and evaluation runner
   phase3_demo.py
   __main__.py
-tests/        Agent-loop, Ollama protocol, and Phase 3 security checks
-docs/         Phase 3 acceptance report and learning guide
+tests/        Agent-loop, Ollama protocol, security, and evaluation tests
+docs/         Phase 3 and Phase 4 reports and learning guides
 ```
 
-See [the acceptance report](docs/PHASE3_ACCEPTANCE_REPORT.md) for evidence and limitations, then follow [the learning guide](docs/PHASE3_LEARNING_GUIDE.md) through the code.
+See the [Phase 3 acceptance report](docs/PHASE3_ACCEPTANCE_REPORT.md) and [learning guide](docs/PHASE3_LEARNING_GUIDE.md), then the [Phase 4 acceptance report](docs/PHASE4_ACCEPTANCE_REPORT.md) and [learning guide](docs/PHASE4_LEARNING_GUIDE.md).
