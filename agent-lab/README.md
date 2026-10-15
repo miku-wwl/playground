@@ -44,4 +44,4 @@ tests/        Agent-loop, Ollama protocol, security, and evaluation tests
 docs/         Phase 3 and Phase 4 reports and learning guides
 ```
 
-See the [Phase 3 acceptance report](docs/PHASE3_ACCEPTANCE_REPORT.md) and [learning guide](docs/PHASE3_LEARNING_GUIDE.md), then the [Phase 4 acceptance report](docs/PHASE4_ACCEPTANCE_REPORT.md) and [learning guide](docs/PHASE4_LEARNING_GUIDE.md).
+See the [Phase 3 acceptance report](docs/PHASE3_ACCEPTANCE_REPORT.md) and [learning guide](docs/PHASE3_LEARNING_GUIDE.md), the [Phase 4 acceptance report](docs/PHASE4_ACCEPTANCE_REPORT.md) and [learning guide](docs/PHASE4_LEARNING_GUIDE.md), and the [final interview cheat sheet](docs/INTERVIEW-CHEATSHEET.md).
