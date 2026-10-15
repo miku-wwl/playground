@@ -9,61 +9,23 @@ from agent_lab.models.decisions import (
     ModelDecision,
     ToolCallDecision,
 )
+from agent_lab.tools.schemas import build_model_decision_schema
 
 
-MODEL_DECISION_SCHEMA: dict[str, object] = {
-    "oneOf": [
-        {
-            "type": "object",
-            "properties": {
-                "type": {"enum": ["tool_call"]},
-                "tool": {"enum": ["get_my_balance"]},
-                "arguments": {
-                    "type": "object",
-                    "properties": {"asset": {"enum": ["USDT"]}},
-                    "required": ["asset"],
-                    "additionalProperties": False,
-                },
-            },
-            "required": ["type", "tool", "arguments"],
-            "additionalProperties": False,
-        },
-        {
-            "type": "object",
-            "properties": {
-                "type": {"enum": ["tool_call"]},
-                "tool": {"enum": ["get_order_status"]},
-                "arguments": {
-                    "type": "object",
-                    "properties": {"order_id": {"type": "string", "minLength": 1}},
-                    "required": ["order_id"],
-                    "additionalProperties": False,
-                },
-            },
-            "required": ["type", "tool", "arguments"],
-            "additionalProperties": False,
-        },
-        {
-            "type": "object",
-            "properties": {
-                "type": {"enum": ["final"]},
-                "answer": {"type": "string", "minLength": 1},
-            },
-            "required": ["type", "answer"],
-            "additionalProperties": False,
-        },
-    ]
-}
+MODEL_DECISION_SCHEMA: dict[str, object] = build_model_decision_schema()
 
 SYSTEM_PROMPT = """You are a small trading support assistant. You do not know account data.
-You may use only these read-only tools:
-- get_my_balance(asset): the user's simulated asset balance; asset must be USDT.
-- get_order_status(order_id): the user's simulated order status.
+You may use only these registered tools:
+- get_my_balance(asset): reads the user's simulated asset balance; asset must be USDT.
+- get_order_status(order_id): reads the user's simulated order status.
+- create_support_ticket(order_id, reason): proposes a simulated support ticket and always requires human approval before execution.
 
 IMPORTANT RULES:
 - If the user asks for a balance or order status, you MUST first return a tool_call.
+- If the user asks to create a support ticket, propose a tool_call; the runtime will require human approval.
 - Do not answer balance or order questions from memory or guess a value.
 - After a tool result appears in the conversation, return a final answer based on that result.
+- A create_support_ticket call only requests human approval; do not say a ticket was created unless its result says EXECUTED.
 - For an unsupported request, return a final answer that says this demo cannot help.
 - Return only the JSON decision required by the schema.
 
