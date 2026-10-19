@@ -13,9 +13,9 @@ from agentic_intent_gate.runtime import (
 )
 from uuid import uuid4
 
-from aig_hello.adapters.executor import GreetingExecutor, list_greetings
-from aig_hello.bootstrap.runtime_factory import open_hello_runtime, provision_if_missing
-from aig_hello.app.workflow import (
+from aig_hello.executor import GreetingExecutor, list_greetings
+from aig_hello.runtime import (
+    open_hello_runtime, provision_if_missing,
     approve_or_reject,
     create_plan_run,
     execute_approved,

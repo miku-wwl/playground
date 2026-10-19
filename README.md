@@ -1,147 +1,86 @@
-# AIG Hello World：独立 Consumer 入门项目
+# AIG Hello World — 极简学习版
 
-这个项目用 **Agentic Intent Gate v0.2.0 的真实公共 API**，演示一个最小可理解的 Agent 执行闭环：
+这是一个真正依赖 **Agentic Intent Gate v0.2.0** 的独立 Consumer 项目，删除了上一版的 `cli.py`、`argparse`、`run/show` 子命令与多层子包。**入口只有 `main.py`。**
+
+## 30 秒理解
 
 ```text
-User Intent: "Hello from AIG!"
-   |
-   v
-DeterministicHelloProvider     <- 模拟 LLM 生成 Plan，零 API Key
-   |
-   v
-AIG Plan Validation            <- AIG 核心负责，不在这里重复实现
-   |
-   v
-Persistent Run / Approval      <- CLI 让操作者看到准确 Plan，必须选 y
-   |
-   v
-Action Admission               <- 绑定准确、已批准的 Plan
-   |
-   v
-Independent Authorization      <- Capability + trusted Policy
-   |
-   v
-Durable Claim / Gateway        <- CAS / effect_key，由 AIG 实施
-   |
-   v
-GreetingExecutor               <- Consumer 自己实现的**唯一** Side Effect 工具
-   |
-   v
-SQLite greeting + receipt      <- Consumer 拥有的独立效果数据库
+main.py（运行 & 人工批准）
+  ├─ planner.py（生成 JSON Plan；当前是确定性 Python，不使用真实 LLM）
+  ├─ runtime.py（组装 AIG；Run -> Approval -> Admission -> Authorization -> Execute）
+  └─ executor.py（受 AIG 调度后，写 SQLite 并记录 Receipt）
 ```
 
-**不使用 LangChain、LangGraph、Ollama、Claude 或 OpenAI**。避免在学习 AIG 的执行原理时被模型部署分散注意力。
+**AIG 本身由 pip/uv 安装的依赖提供，不复制 AIG 核心源码。**
 
-## 环境要求
+## Windows 上运行
 
-- Python **3.13**，Windows PowerShell（Linux/macOS 也可以）。
-- `uv`：https://docs.astral.sh/uv/
-- 首次安装依赖时需要可以访问 GitHub 和 PyPI / 对应包镜像。
+要求：Python 3.13 和已安装的 `uv`；首次安装需要可访问 GitHub 和 Python 包源。
 
-AIG 依赖固定在已验证的 `v0.2.0` 提交：
-
-`7261fdd2f47d2b15fabe8faac527eeee37338eb1`
-
-安装的是上游仓库的 Python 包，不在这个 ZIP 里复制任何 AIG 核心代码。
-
-## 运行（PowerShell）
+在解压后的 `aig-hello-world-simple` 根目录运行：
 
 ```powershell
-# 1. 在解压后的 aig-hello-world 目录中执行
 uv sync
+uv run python main.py
+```
 
-# 2. 首次运行：必须确认没有其他进程正在使用这个演示数据目录
-uv run aig-hello run --message "Hello from AIG!" --data-dir .demo --predecessor-stopped
+首次运行生成新的 `.demo/` 数据目录，打印 Plan，等待：
 
-# 3. 看到生成的 Plan 后输入 y 进行人工审批，或 N 拒绝
+```text
+[3] 是否批准这个准确的 Plan？[y/n]:
+```
 
-# 4. 退出程序后仍可以查看持久化收据
-uv run aig-hello show --data-dir .demo
+输入 `y` 并按 Enter，才会走完真实 AIG 的 Action Admission、独立 Authorization、Durable Claim 和 ToolExecutor。输入 `n` 明确拒绝；直接回车或中断不会替你记录审批决定。
 
-# 5. 运行真正的 AIG Consumer 集成测试
+**第二次运行：** 复用已有 `.demo` 时会先要求你确认上一进程和辅助进程都已停止。这是保留 AIG single-owner 安全机制的必要一步，并非另一个业务审批。
+
+要修改消息，直接编辑 `main.py` 顶部：
+
+```python
+MESSAGE = "Hello from AIG!"
+```
+
+不需要任何 CLI 参数、Ollama、Phi-4-mini、API Key、LangChain 或 LangGraph。
+
+想查看数据库结果，程序在成功后自动列出已保存的 greeting 与 receipt。你也可以使用 SQLite 数据库浏览器只读查看项目根目录的 `.demo/effects.sqlite3`；AIG 的内部状态在 `.demo/gate.sqlite3`。
+
+运行集成测试：
+
+```powershell
 uv run python -m unittest discover -s tests -v
 ```
 
-如果想观察 Approval Gate 拒绝效果，可以先运行一次，在审批时输入 `n`；之后再独立运行一次并输入 `y`。
-
-`--predecessor-stopped` 是你本人对 **已停止此前使用同一数据目录的进程及其辅助进程** 的确认；不能机械地在生产环境中跳过检查。
-
-运行成功会自动创建：
+## 项目结构
 
 ```text
-.demo/
-  identity.json       # 六字段 Trusted ToolBinding（启动时固定）
-  capability          # 本地秘密 Token，绝不提交
-  gate.sqlite3        # AIG 自己持久化的 Runs / Approvals / Actions / Audit
-  effects.sqlite3     # Hello Consumer 自己的 greetings / receipts
-```
-
-该目录在 `.gitignore` 中。不要分享真实的 `capability` 文件。
-
-## 项目目录（按职责分包）
-
-```text
-aig-hello-world/
-├── pyproject.toml                # AIG v0.2.0 固定 Git 依赖和 CLI 入口
+aig-hello-world-simple/
+├── main.py                        # ① 最先看：入口、打印 Plan 和审批
+├── pyproject.toml                 # AIG v0.2.0 固定 Git 依赖
 ├── README.md
-├── AGENTS.md
 ├── .gitignore
-├── .env.example
-├── docs/
-│   └── CODE_WALKTHROUGH.md
 ├── src/
 │   └── aig_hello/
 │       ├── __init__.py
-│       ├── app/                  # 面向用户的入口和用例编排
-│       │   ├── __init__.py
-│       │   ├── cli.py            # CLI / 人工审批交互
-│       │   └── workflow.py       # Run → Approval → Admission → Authorization → Execute
-│       ├── adapters/             # Consumer 对 AIG Ports 的具体实现
-│       │   ├── __init__.py
-│       │   ├── planner.py        # 确定性 ModelProvider（无真实 LLM）
-│       │   └── executor.py       # SQLite GreetingExecutor / Receipt Store
-│       └── bootstrap/            # 依赖注入 / 可信组件组装
-│           ├── __init__.py
-│           └── runtime_factory.py
+│       ├── planner.py             # ② 返回固定结构的 Plan JSON
+│       ├── runtime.py             # ③ 真实 AIG 的连接和执行调用
+│       └── executor.py            # ④ SQLite GreetingExecutor
 └── tests/
-    └── test_integration.py       # AIG 真实公共接口集成测试
+    └── test_integration.py       # 四个真实 Runtime 集成测试
 ```
 
-### 三个目录怎么理解？
+### 要弄懂的三个点
 
-- **`app/`**：对外呈现 CLI，并安排整个业务执行步骤；不直接写 SQLite。
-- **`adapters/`**：实现可替换的 Plan 生成器和唯一的副作用工具；不会重新实现 AIG 安全机制。
-- **`bootstrap/`**：Composition Root，注册可信工具、配置 Capability/Policy，将 Consumer 组件注入 AIG。
+1. **Plan 不等于 Tool Call：** `planner.py` 只返回 JSON，AIG 会验证它。
+2. **Approval 不等于 Authorization：** `main.py` 获取用户意见，`runtime.py` 里的 Gateway 仍执行 Action Admission 和单独授权。
+3. **执行者是 Harness，不是 LLM：** `ActionExecutionGateway` 通过 `ExecutableRegistry` 调用 `GreetingExecutor.execute()`。
 
-注意：`src/aig_hello` 是**独立 Consumer** 的代码，不是 AIG 核心 Runtime 的副本。
+## 安全说明
 
-## 推荐阅读顺序
+- 数据目录固定为**项目根目录** `.demo`，和旧版你在 `src` 目录运行时产生的 `src/.demo` 不同。不会搬迁、删除或覆盖旧数据库。
+- `predecessor_stopped=True` 仅在首次新建目录或用户明确确认旧进程已停止后传入；不要同时启动两个实例处理同一存储。
+- `.demo` 包含秘密 capability，不要提交或共享。
+- 只允许执行一个注册的 `write_greeting` SIDE_EFFECT 工具，使用真实 AIG v0.2.0 API。
+- 没有自动重试或 Unknown 恢复，也没有真实云端副作用；本地 SQLite Receipt 不代表远程 API 的 Exactly Once。
+- 输入 y 是本地教学用的人工确认，并不构成生产环境真实身份认证。
 
-1. `README.md`：先看执行流程和责任边界。
-2. `src/aig_hello/app/cli.py`：终端入口、Plan 展示和人工确认。
-3. `src/aig_hello/bootstrap/runtime_factory.py`：为什么独立项目能通过公共 API 使用 AIG。
-4. `src/aig_hello/app/workflow.py`：Approval → Admission → Authorization → Execution 的真实链路。
-5. `src/aig_hello/adapters/planner.py`：模型如何仅提供一个待验证 Plan。
-6. `src/aig_hello/adapters/executor.py`：真正产生副作用并持久化 Receipt。
-7. `tests/test_integration.py`：通过测试观察批准/授权/幂等/恢复边界。
-
-详细导读在 `docs/CODE_WALKTHROUGH.md`。
-
-## 安全与限制
-
-- 这是 **本地离线学习 Demo**，不是公网服务，也不是生产认证系统。
-- 它使用 **确定性 ModelProvider** 而非真实 LLM。这是特意的：先看清 AIG 架构，再增加模型调用。
-- CLI 的 `y` 是 Demo 人工批准，不能证明操作员真实身份。
-- AIG v0.2.0 只执行启动时明确绑定的一个 `SIDE_EFFECT` 工具和一步 Action。
-- 不能认为本地 SQLite 的 Receipt 能保证任意云端 API 的 exactly-once 效果。
-- 不允许自动重试 `Unknown` 状态；示例只写本地 SQLite。
-- 此项目不修改、不 fork、不复制 AIG 的源代码。
-- 建议不要在此 Demo 的数据目录上运行不同版本 AIG 或多个进程。
-
-## 安装失败怎么办？
-
-- 确认 Python 是 3.13：`python --version`。
-- 确认可以访问 GitHub：`git ls-remote https://github.com/miku-wwl/agentic-intent-gate.git`。
-- 若 `uv sync` 无法下载依赖，先解决 GitHub 或 Python 包源网络问题；不用复制 AIG 源码作为变通。
-
-> 验证说明：制作 ZIP 的环境无法访问 GitHub，因此无法安装上游 AIG 并现场执行集成测试；仓库的公共 API 和调用顺序已与 v0.2.0 的真实 `examples/consumer/app.py` 对照。你本机安装依赖后，运行上面的 `unittest` 才能完成真实 E2E 验证。
+**依赖固定提交：** `7261fdd2f47d2b15fabe8faac527eeee37338eb1`（`agentic-intent-gate==0.2.0`）。

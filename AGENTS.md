@@ -1,15 +1,10 @@
-# Agent notes for this small Consumer
+# AIG Hello World — agent development instructions
 
-This is **not** the Agentic Intent Gate core repository. Never reimplement AIG's
-Approval, Authorization, Action Gateway, CAS, claim, or recovery logic here.
-
-- Install AIG at the exact full Git commit pinned by `pyproject.toml`.
-- Integrate ONLY through `agentic_intent_gate.runtime` public imports.
-- The planner is deterministic and makes no actual model call.
-- Preserve the `app/`, `adapters/`, `bootstrap/` responsibilities and `aig_hello.app.cli:main` entrypoint.
-- Do not mistake the CLI's interactive approval for production authentication.
-- Keep `hello-world`/`write_greeting`/scope and the private effect-store identity stable.
-- Never overwrite a preexisting data directory or regenerate its token/scope on restart.
-- No real external APIs, secrets, background retries, dynamic tools, or production traffic.
-- Do not change AIG's core code or the v0.2.0 release tag.
-- Execute mutation commands only with clear user authorization; never commit/push automatically.
+- This is an educational **consumer** of upstream Agentic Intent Gate v0.2.0, pinned to the exact Git commit in `pyproject.toml`.
+- Keep startup easy: `uv run python main.py`. Do not re-introduce argparse/CLI commands without a request.
+- Keep only four teaching files: root `main.py`, and `src/aig_hello/{planner,runtime,executor}.py`.
+- Never simulate user Approval (`y`) or attest that a previous AIG process stopped without evidence/user instruction.
+- AIG owns Plan validation, Approval binding, Authorization, durable claims and recovery. Do not bypass or copy these mechanisms.
+- Do not rewrite stored identities, reset `.demo`, retry `Unknown` effects, expose capability tokens, or modify upstream AIG source.
+- Use a fresh isolated test directory rather than the live `.demo` for automated tests.
+- Do not commit/push/deploy unless explicitly asked.
