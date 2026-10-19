@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "aig-hello-world"
+version = "0.1.0"
+description = "Tiny offline consumer of Agentic Intent Gate v0.2.0"
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+license = "MIT"
+dependencies = [
+    "agentic-intent-gate @ git+https://github.com/miku-wwl/agentic-intent-gate.git@7261fdd2f47d2b15fabe8faac527eeee37338eb1",
+]
+
+[project.scripts]
+aig-hello = "aig_hello.app.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/aig_hello"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
